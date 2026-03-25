@@ -41,7 +41,9 @@
 
             try {
                 // TfL API endpoint: arrivals for a specific station (StopPoint)
-                const url = "https://api.tfl.gov.uk/StopPoint/STFD/Arrivals";
+
+                const url = "https://corsproxy.io/?" +
+                    encodeURIComponent("https://api.tfl.gov.uk/StopPoint/STFD/Arrivals");
 
                 const res = await fetch(url);
                 const data = await res.json();
