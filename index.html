@@ -3,22 +3,19 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Elizabeth Line – Stratford Departures</title>
+    <title>Central Line – Mile End</title>
 
     <style>
         body {
             font-family: system-ui, sans-serif;
             padding: 2rem;
-            background: #f0f4ff;
-            color: #001f3f;
-        }
-        h1 {
-            margin-bottom: 0.5rem;
+            background: #fff3e0;
+            color: #b00020;
         }
         #result {
             margin-top: 1.5rem;
-            padding: 1rem;
             background: white;
+            padding: 1rem;
             border-radius: 8px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         }
@@ -30,7 +27,7 @@
 </head>
 <body>
 
-    <h1>🚆 Elizabeth Line – Stratford</h1>
+    <h1>🚇 Central Line – Mile End</h1>
     <p>Next departure:</p>
 
     <div id="result">Loading...</div>
@@ -39,31 +36,33 @@
         async function loadNextTrain() {
             const resultDiv = document.getElementById("result");
 
+            // TfL StopPoint ID for Mile End station
+            const stopId = "940GZZLUME";
+
+            // Use a CORS proxy so GitHub Pages can load it
+            const apiURL = "https://api.tfl.gov.uk/StopPoint/" + stopId + "/Arrivals";
+            const url = "https://corsproxy.io/?" + encodeURIComponent(apiURL);
+
             try {
-                // TfL API endpoint: arrivals for a specific station (StopPoint)
-
-                const url = "https://corsproxy.io/?" +
-                    encodeURIComponent("https://api.tfl.gov.uk/StopPoint/STFD/Arrivals");
-
                 const res = await fetch(url);
                 const data = await res.json();
 
-                // Filter for Elizabeth line (lineId = "elizabeth")
-                const liz = data.filter(t => t.lineId === "elizabeth");
+                // Filter for Central line arrivals
+                const central = data.filter(t => t.lineId === "central");
 
-                if (liz.length === 0) {
-                    resultDiv.textContent = "No Elizabeth line data available.";
+                if (central.length === 0) {
+                    resultDiv.textContent = "No Central line data available.";
                     return;
                 }
 
-                // Sort by next arrival (expected arrival time)
-                liz.sort((a, b) => a.timeToStation - b.timeToStation);
+                // Sort by soonest arrival
+                central.sort((a, b) => a.timeToStation - b.timeToStation);
+                const next = central[0];
 
-                const next = liz[0];
-                const minutes = Math.round(next.timeToStation / 60);
+                const mins = Math.round(next.timeToStation / 60);
 
                 resultDiv.innerHTML = `
-                    <div class="time">${minutes} minute(s)</div>
+                    <div class="time">${mins} minute(s)</div>
                     <div>Destination: <strong>${next.destinationName}</strong></div>
                     <div>Platform: ${next.platformName || "Unknown"}</div>
                     <div>Scheduled: ${new Date(next.expectedArrival).toLocaleTimeString()}</div>
@@ -75,7 +74,7 @@
         }
 
         loadNextTrain();
-        setInterval(loadNextTrain, 20000); // refresh every 20 seconds
+        setInterval(loadNextTrain, 20000);
     </script>
 
 </body>
