@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Delay Probability: Mile End vs Stepney Green</title>
+<title>Delay Probability: Mile End vs Stepney Green (Gaussian Regression)</title>
 <style>
   body { font-family: Arial, sans-serif; padding: 2rem; }
   .card { padding: 1rem; margin: 1rem 0; border: 1px solid #ddd; border-radius: 8px; }
@@ -12,12 +12,10 @@
 <body>
 
 <h1>🚇 Delay Probability: Mile End vs Stepney Green</h1>
-<p>Live Central Line Status + Gaussian Regression Model</p>
-
-<div id="status" class="card">Loading TfL status…</div>
+<p>Gaussian Regression ML Demo (Self‑Contained)</p>
 
 <div class="card">
-  <h2>📊 Probability Estimates</h2>
+  <h2>📊 Current Estimated Probabilities</h2>
   <p id="mileend">Mile End: …</p>
   <p id="stepneygreen">Stepney Green: …</p>
 </div>
@@ -25,69 +23,133 @@
 <canvas id="plot" width="600" height="300"></canvas>
 
 <script>
-//
-// 1. Synthetic dataset: (hour → probability)
-// Mile End has a slightly higher baseline than Stepney Green.
-//
+// ---------------------------
+// 1. Synthetic Dataset
+// ---------------------------
 const hours = [...Array(24).keys()];
+
 const dataMileEnd = hours.map(h => ({
   x: h,
-  y: 0.25 + 0.15 * Math.exp(-((h-8)**2)/18) + 0.1 * Math.random()
+  y: 0.30 + 0.20 * Math.exp(-((h-8)**2)/18) + 0.05*Math.random()
 }));
 
 const dataStepney = hours.map(h => ({
   x: h,
-  y: 0.15 + 0.10 * Math.exp(-((h-8)**2)/18) + 0.1 * Math.random()
+  y: 0.18 + 0.12 * Math.exp(-((h-8)**2)/18) + 0.05*Math.random()
 }));
 
-//
-// 2. Gaussian basis functions
-//
+// ---------------------------
+// 2. Gaussian Basis Functions
+// ---------------------------
 function gaussian(x, mu, sigma) {
   return Math.exp(- (x - mu)**2 / (2*sigma*sigma));
 }
-
 function buildPhi(x, mus, sigma) {
   return mus.map(mu => gaussian(x, mu, sigma));
 }
 
-//
-// 3. Matrix helpers
-//
+// ---------------------------
+// 3. Matrix Helpers
+// ---------------------------
 function transpose(A){ return A[0].map((_,c)=>A.map(r=>r[c])); }
 function matMul(A,B){
   return A.map(r=>B[0].map((_,j)=>r.reduce((s,v,i)=>s+v*B[i][j],0)));
 }
 function invert(M){
-  const n=M.length;
-  const A=M.map(r=>r.slice());
-  const I=M.map((r,i)=>r.map((_,j)=>i===j?1:0));
+  const n = M.length;
+  const A = M.map(r=>r.slice());
+  const I = M.map((r,i)=>r.map((_,j)=>i===j?1:0));
   for(let i=0;i<n;i++){
-    let diag=A[i][i];
+    let diag = A[i][i];
     for(let j=0;j<n;j++){ A[i][j]/=diag; I[i][j]/=diag; }
     for(let k=0;k<n;k++){
       if(k===i) continue;
-      let f=A[k][i];
-      for(let j=0;j<n;j++){ A[k][j]-=f*A[i][j]; I[k][j]-=f*I[i][j]; }
+      let f = A[k][i];
+      for(let j=0;j<n;j++){
+        A[k][j]-=f*A[i][j];
+        I[k][j]-=f*I[i][j];
+      }
     }
   }
   return I;
 }
 
-//
-// 4. Fit Gaussian regression model
-//
+// ---------------------------
+// 4. Fit Gaussian Regression
+// ---------------------------
 function fitModel(dataset){
   const K = 10;
   const mus = Array.from({length:K},(_,i)=>i*(24/(K-1)));
-  const sigma = 2.5;
+  const sigma = 2.2;
 
   const Phi = dataset.map(p => buildPhi(p.x, mus, sigma));
   const y = dataset.map(p => [p.y]);
 
   const PhiT = transpose(Phi);
   const w = matMul(invert(matMul(PhiT,Phi)), matMul(PhiT,y));
+
   return { mus, sigma, weights: w.map(r=>r[0]) };
 }
 
 function predict(model, x){
+  const phi = buildPhi(x, model.mus, model.sigma);
+  return phi.reduce((s,v,i)=>s+v*model.weights[i], 0);
+}
+
+const modelMileEnd = fitModel(dataMileEnd);
+const modelStepney = fitModel(dataStepney);
+
+// ---------------------------
+// 5. Update Current Estimated Probability
+// ---------------------------
+function updateProbabilities(){
+  const hour = new Date().getHours();
+  const p1 = predict(modelMileEnd, hour);
+  const p2 = predict(modelStepney, hour);
+
+  document.getElementById("mileend").textContent =
+    "Mile End: " + (100 * p1).toFixed(1) + "% chance of delay";
+
+  document.getElementById("stepneygreen").textContent =
+    "Stepney Green: " + (100 * p2).toFixed(1) + "% chance of delay";
+}
+
+updateProbabilities();
+
+// ---------------------------
+// 6. Plot Curves
+// ---------------------------
+function drawPlot(){
+  const canvas = document.getElementById("plot");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0,0,600,300);
+
+  function mapX(x){ return x/23*600; }
+  function mapY(y){ return 300 - y*300; }
+
+  // Mile End curve
+  ctx.strokeStyle="red";
+  ctx.beginPath();
+  for(let h=0;h<=23;h++){
+    const y=predict(modelMileEnd,h);
+    if(h===0) ctx.moveTo(mapX(h),mapY(y));
+    else ctx.lineTo(mapX(h),mapY(y));
+  }
+  ctx.stroke();
+
+  // Stepney Green curve
+  ctx.strokeStyle="blue";
+  ctx.beginPath();
+  for(let h=0;h<=23;h++){
+    const y=predict(modelStepney,h);
+    if(h===0) ctx.moveTo(mapX(h),mapY(y));
+    else ctx.lineTo(mapX(h),mapY(y));
+  }
+  ctx.stroke();
+}
+
+drawPlot();
+</script>
+
+</body>
+</html>
