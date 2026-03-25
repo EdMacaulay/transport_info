@@ -1,58 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Central Line Status Demo</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 2rem;
-      background: #f0f4ff;
-    }
-    #status {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      font-size: 1.2rem;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Delay Probability: Mile End vs Stepney Green</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 2rem; }
+  .card { padding: 1rem; margin: 1rem 0; border: 1px solid #ddd; border-radius: 8px; }
+  #plot { border: 1px solid #aaa; margin-top: 2rem; }
+</style>
 </head>
 <body>
 
-<h1>🚇 Central Line Status</h1>
-<p>Live TfL status feed:</p>
+<h1>🚇 Delay Probability: Mile End vs Stepney Green</h1>
+<p>Live Central Line Status + Gaussian Regression Model</p>
 
-<div id="status">Loading…</div>
+<div id="status" class="card">Loading TfL status…</div>
+
+<div class="card">
+  <h2>📊 Probability Estimates</h2>
+  <p id="mileend">Mile End: …</p>
+  <p id="stepneygreen">Stepney Green: …</p>
+</div>
+
+<canvas id="plot" width="600" height="300"></canvas>
 
 <script>
-async function loadStatus() {
-    const box = document.getElementById("status");
+//
+// 1. Synthetic dataset: (hour → probability)
+// Mile End has a slightly higher baseline than Stepney Green.
+//
+const hours = [...Array(24).keys()];
+const dataMileEnd = hours.map(h => ({
+  x: h,
+  y: 0.25 + 0.15 * Math.exp(-((h-8)**2)/18) + 0.1 * Math.random()
+}));
 
-    // TfL Line Status endpoint (CORS‑safe)
-    const url = "https://api.tfl.gov.uk/Line/central/Status";
+const dataStepney = hours.map(h => ({
+  x: h,
+  y: 0.15 + 0.10 * Math.exp(-((h-8)**2)/18) + 0.1 * Math.random()
+}));
 
-    try {
-        const res = await fetch(url);
-        const data = await res.json();
-
-        const line = data[0];
-        const state = line.lineStatuses[0].statusSeverityDescription;
-        const reason = line.lineStatuses[0].reason || "";
-
-        box.innerHTML = `
-            <strong>Status:</strong> ${state}<br>
-            ${reason ? `<em>${reason}</em>` : ""}
-        `;
-    } catch (err) {
-        box.textContent = "Error loading line status.";
-        console.error(err);
-    }
+//
+// 2. Gaussian basis functions
+//
+function gaussian(x, mu, sigma) {
+  return Math.exp(- (x - mu)**2 / (2*sigma*sigma));
 }
 
-loadStatus();
-</script>
+function buildPhi(x, mus, sigma) {
+  return mus.map(mu => gaussian(x, mu, sigma));
+}
 
-</body>
-</html>
+//
+// 3. Matrix helpers
+//
+function transpose(A){ return A[0].map((_,c)=>A.map(r=>r[c])); }
+function matMul(A,B){
+  return A.map(r=>B[0].map((_,j)=>r.reduce((s,v,i)=>s+v*B[i][j],0)));
+}
+function invert(M){
+  const n=M.length;
+  const A=M.map(r=>r.slice());
+  const I=M.map((r,i)=>r.map((_,j)=>i===j?1:0));
+  for(let i=0;i<n;i++){
+    let diag=A[i][i];
+    for(let j=0;j<n;j++){ A[i][j]/=diag; I[i][j]/=diag; }
+    for(let k=0;k<n;k++){
+      if(k===i) continue;
+      let f=A[k][i];
+      for(let j=0;j<n;j++){ A[k][j]-=f*A[i][j]; I[k][j]-=f*I[i][j]; }
+    }
+  }
+  return I;
+}
+
+//
+// 4. Fit Gaussian regression model
+//
+function fitModel(dataset){
+  const K = 10;
+  const mus = Array.from({length:K},(_,i)=>i*(24/(K-1)));
+  const sigma = 2.5;
+
+  const Phi = dataset.map(p => buildPhi(p.x, mus, sigma));
+  const y = dataset.map(p => [p.y]);
+
+  const PhiT = transpose(Phi);
+  const w = matMul(invert(matMul(PhiT,Phi)), matMul(PhiT,y));
+  return { mus, sigma, weights: w.map(r=>r[0]) };
+}
+
+function predict(model, x){
