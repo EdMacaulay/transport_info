@@ -2,76 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Next Central Line Train – Mile End</title>
+  <title>Central Line Status Demo</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 2rem;
-      background: #fff3e0;
-      color: #b00020;
+      background: #f0f4ff;
     }
-    #result {
+    #status {
       margin-top: 1rem;
       padding: 1rem;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    .big {
-      font-size: 1.6rem;
-      font-weight: bold;
+      font-size: 1.2rem;
     }
   </style>
 </head>
 <body>
 
-<h1>🚇 Central Line tube — Mile End</h1>
-<p>Next expected departure:</p>
-<div id="result">Loading…</div>
+<h1>🚇 Central Line Status</h1>
+<p>Live TfL status feed:</p>
+
+<div id="status">Loading…</div>
 
 <script>
-async function loadNextTrain() {
-    const result = document.getElementById("result");
+async function loadStatus() {
+    const box = document.getElementById("status");
 
-    // TfL timetable endpoint (CORS-safe)
-    const url = "https://api.tfl.gov.uk/Line/central/Timetable/940GZZLUME";
+    // TfL Line Status endpoint (CORS‑safe)
+    const url = "https://api.tfl.gov.uk/Line/central/Status";
 
     try {
         const res = await fetch(url);
         const data = await res.json();
 
-        // The timetable structure contains routes → stations → intervals
-        const routes = data.timetable.routes;
-        if (!routes || routes.length === 0) {
-            result.textContent = "No timetable data available.";
-            return;
-        }
+        const line = data[0];
+        const state = line.lineStatuses[0].statusSeverityDescription;
+        const reason = line.lineStatuses[0].reason || "";
 
-        // First route, first station entry
-        const firstStation = routes[0].stations[0];
-
-        // These are intervals (minutes) until upcoming trains
-        const departures = firstStation.intervals;
-
-        if (!departures || departures.length === 0) {
-            result.textContent = "No departure information.";
-            return;
-        }
-
-        const next = departures[0]; // the soonest
-        const mins = next.interval;
-
-        result.innerHTML = `
-            <div class="big">${mins} minute(s)</div>
-            <p>Based on timetable estimates (not live arrivals).</p>
+        box.innerHTML = `
+            <strong>Status:</strong> ${state}<br>
+            ${reason ? `<em>${reason}</em>` : ""}
         `;
     } catch (err) {
-        result.textContent = "Error loading data.";
+        box.textContent = "Error loading line status.";
         console.error(err);
     }
 }
 
-loadNextTrain();
+loadStatus();
 </script>
 
 </body>
