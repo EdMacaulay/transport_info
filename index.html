@@ -1,81 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Central Line – Mile End</title>
-
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            padding: 2rem;
-            background: #fff3e0;
-            color: #b00020;
-        }
-        #result {
-            margin-top: 1.5rem;
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        }
-        .time {
-            font-size: 1.4rem;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Next Central Line Train – Mile End</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #fff3e0;
+      color: #b00020;
+    }
+    #result {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .big {
+      font-size: 1.6rem;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 
-    <h1>🚇 Central Line – Mile End</h1>
-    <p>Next departure:</p>
+<h1>🚇 Central Line — Mile End</h1>
+<p>Next expected departure:</p>
+<div id="result">Loading…</div>
 
-    <div id="result">Loading...</div>
+<script>
+async function loadNextTrain() {
+    const result = document.getElementById("result");
 
-    <script>
-        async function loadNextTrain() {
-            const resultDiv = document.getElementById("result");
+    // TfL timetable endpoint (CORS-safe)
+    const url = "https://api.tfl.gov.uk/Line/central/Timetable/940GZZLUME";
 
-            // TfL StopPoint ID for Mile End station
-            const stopId = "940GZZLUME";
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
 
-            // Use a CORS proxy so GitHub Pages can load it
-            const apiURL = "https://api.tfl.gov.uk/StopPoint/" + stopId + "/Arrivals";
-            const url = "https://corsproxy.io/?" + encodeURIComponent(apiURL);
-
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-
-                // Filter for Central line arrivals
-                const central = data.filter(t => t.lineId === "central");
-
-                if (central.length === 0) {
-                    resultDiv.textContent = "No Central line data available.";
-                    return;
-                }
-
-                // Sort by soonest arrival
-                central.sort((a, b) => a.timeToStation - b.timeToStation);
-                const next = central[0];
-
-                const mins = Math.round(next.timeToStation / 60);
-
-                resultDiv.innerHTML = `
-                    <div class="time">${mins} minute(s)</div>
-                    <div>Destination: <strong>${next.destinationName}</strong></div>
-                    <div>Platform: ${next.platformName || "Unknown"}</div>
-                    <div>Scheduled: ${new Date(next.expectedArrival).toLocaleTimeString()}</div>
-                `;
-            } catch (err) {
-                resultDiv.textContent = "Error loading data.";
-                console.error(err);
-            }
+        // The timetable structure contains routes → stations → intervals
+        const routes = data.timetable.routes;
+        if (!routes || routes.length === 0) {
+            result.textContent = "No timetable data available.";
+            return;
         }
 
-        loadNextTrain();
-        setInterval(loadNextTrain, 20000);
-    </script>
+        // First route, first station entry
+        const firstStation = routes[0].stations[0];
+
+        // These are intervals (minutes) until upcoming trains
+        const departures = firstStation.intervals;
+
+        if (!departures || departures.length === 0) {
+            result.textContent = "No departure information.";
+            return;
+        }
+
+        const next = departures[0]; // the soonest
+        const mins = next.interval;
+
+        result.innerHTML = `
+            <div class="big">${mins} minute(s)</div>
+            <p>Based on timetable estimates (not live arrivals).</p>
+        `;
+    } catch (err) {
+        result.textContent = "Error loading data.";
+        console.error(err);
+    }
+}
+
+loadNextTrain();
+</script>
 
 </body>
 </html>
