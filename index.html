@@ -1,69 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stratford Elizabeth Line Tracker</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Elizabeth Line – Stratford Departures</title>
+
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f4f9; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 10px solid #603087; /* Elizabeth Line Purple */ }
-        h1 { color: #333; margin-bottom: 0.5rem; }
-        .time { font-size: 3rem; font-weight: bold; color: #603087; margin: 1rem 0; }
-        .destination { font-size: 1.2rem; color: #666; }
-        button { background: #603087; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 1rem; }
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 2rem;
+            background: #f0f4ff;
+            color: #001f3f;
+        }
+        h1 {
+            margin-bottom: 0.5rem;
+        }
+        #result {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .time {
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h1>Next Elizabeth Line</h1>
-    <p>From Stratford</p>
-    <div id="loader">Loading...</div>
-    <div id="arrival-info" style="display:none;">
-        <div class="time" id="minutes">--</div>
-        <div class="destination" id="towards">--</div>
-    </div>
-    <button onclick="fetchArrivals()">Refresh</button>
-</div>
+    <h1>🚆 Elizabeth Line – Stratford</h1>
+    <p>Next departure:</p>
 
-<script>
-    async function fetchArrivals() {
-        const infoDiv = document.getElementById('arrival-info');
-        const loader = document.getElementById('loader');
-        
-        try {
-            // Stratford NaPTAN for Elizabeth Line: 910GSTFD
-            const response = await fetch('https://api.tfl.gov.uk/StopPoint/910GSTFD/Arrivals');
-            const data = await response.json();
+    <div id="result">Loading...</div>
 
-            // Filter for Elizabeth line and sort by time
-            const lizLine = data
-                .filter(train => train.lineName === 'elizabeth')
-                .sort((a, b) => a.timeToStation - b.timeToStation);
+    <script>
+        async function loadNextTrain() {
+            const resultDiv = document.getElementById("result");
 
-            if (lizLine.length > 0) {
-                const nextTrain = lizLine[0];
-                const mins = Math.floor(nextTrain.timeToStation / 60);
-                
-                document.getElementById('minutes').innerText = mins <= 0 ? "Due" : mins + " min";
-                document.getElementById('towards').innerText = "Towards " + nextTrain.destinationName;
-                
-                loader.style.display = 'none';
-                infoDiv.style.display = 'block';
-            } else {
-                loader.innerText = "No live trains found.";
+            try {
+                // TfL API endpoint: arrivals for a specific station (StopPoint)
+                const url = "https://api.tfl.gov.uk/StopPoint/STFD/Arrivals";
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                // Filter for Elizabeth line (lineId = "elizabeth")
+                const liz = data.filter(t => t.lineId === "elizabeth");
+
+                if (liz.length === 0) {
+                    resultDiv.textContent = "No Elizabeth line data available.";
+                    return;
+                }
+
+                // Sort by next arrival (expected arrival time)
+                liz.sort((a, b) => a.timeToStation - b.timeToStation);
+
+                const next = liz[0];
+                const minutes = Math.round(next.timeToStation / 60);
+
+                resultDiv.innerHTML = `
+                    <div class="time">${minutes} minute(s)</div>
+                    <div>Destination: <strong>${next.destinationName}</strong></div>
+                    <div>Platform: ${next.platformName || "Unknown"}</div>
+                    <div>Scheduled: ${new Date(next.expectedArrival).toLocaleTimeString()}</div>
+                `;
+            } catch (err) {
+                resultDiv.textContent = "Error loading data.";
+                console.error(err);
             }
-        } catch (error) {
-            loader.innerText = "Error loading data.";
-            console.error(error);
         }
-    }
 
-    // Run on load
-    fetchArrivals();
-    // Auto-refresh every 30 seconds
-    setInterval(fetchArrivals, 30000);
-</script>
+        loadNextTrain();
+        setInterval(loadNextTrain, 20000); // refresh every 20 seconds
+    </script>
 
 </body>
 </html>
